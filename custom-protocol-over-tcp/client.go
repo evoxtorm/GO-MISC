@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -8,6 +10,24 @@ import (
 
 type Message struct {
 	Body map[string]interface{} `json:"body"`
+}
+
+func encrypt(message Message) ([]byte, error) {
+	text, err := json.Marshal(message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %v", err)
+	}
+	key := []byte("0123456789abcdef0123456789abcdef")
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AES cipher: %v", err)
+	}
+	iv := make([]byte, aes.BlockSize)
+
+	cipherText := make([]byte, len(text))
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(cipherText, text)
+	return cipherText, nil
 }
 
 func main() {
@@ -20,14 +40,8 @@ func main() {
 		Body: make(map[string]interface{}),
 	}
 	message.Body["v"] = "some value which should be seen"
-	// message := "Hello to the server, can you able to recieve this message"
-
-	jsondata, err := json.Marshal(message)
-	if err != nil {
-		fmt.Printf("Error while marshaling JSON: %s\n", err.Error())
-		return
-	}
-	val, err := conn.Write([]byte(jsondata))
+	encryptedData, err := encrypt(message)
+	val, err := conn.Write(encryptedData)
 	fmt.Printf("%+v\n", val)
 	if err != nil {
 		fmt.Printf("Error while writing message to the server : %s\n", err.Error())
