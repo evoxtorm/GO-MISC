@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -8,6 +10,24 @@ import (
 
 type Message struct {
 	Body map[string]interface{} `json:"body"`
+}
+
+func decrypt(cipherText []byte) (Message, error) {
+	key := []byte("0123456789abcdef0123456789abcdef")
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return Message{}, fmt.Errorf("failed to create AES cipher: %v", err)
+	}
+	iv := make([]byte, aes.BlockSize)
+	text := make([]byte, len(cipherText))
+	mode := cipher.NewCBCDecrypter(block, iv)
+	mode.CryptBlocks(text, cipherText)
+	var message Message
+	err = json.Unmarshal(text, &message)
+	if err != nil {
+		return Message{}, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+	return message, nil
 }
 
 func handleConnection(conn net.Conn) {
@@ -24,9 +44,7 @@ func handleConnection(conn net.Conn) {
 			fmt.Printf("Error reading from connection: %s\n", err.Error())
 			return
 		}
-		var message Message
-		err = json.Unmarshal(buffer[:n], &message)
-
+		message, err := decrypt(buffer[:n])
 		body := message.Body
 
 		fmt.Println("Received Body:")
